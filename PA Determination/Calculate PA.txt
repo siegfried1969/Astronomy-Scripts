@@ -1,0 +1,84 @@
+"""
+# Functional Analysis: Camera Orientation Calculator for Astrometry
+
+## Overview
+This script calculates the camera orientation angle (Phi) relative to the celestial sphere,
+using the positions of two stars in both celestial (RA/Dec) and pixel coordinates.
+
+---
+
+## 1. Coordinate Conversion: HMS/DMS to Decimal Degrees
+
+### Functions
+- `hms_to_deg(ra_h, ra_m, ra_s)`
+  - Converts Right Ascension (RA) from H:M:S to decimal degrees.
+  - Formula: `RA (deg) = 15 * (RA_h + RA_m/60 + RA_s/3600)`
+  - 1 hour of RA = 15° (360°/24h).
+
+- `dms_to_deg(dec_d, dec_m, dec_s, sign)`
+  - Converts Declination (Dec) from D:M:S to decimal degrees, applying the sign (+/-).
+  - Formula: `Dec (deg) = (Dec_d + Dec_m/60 + Dec_s/3600) * sign`
+
+---
+
+## 2. Celestial Position Angle (PA_cel)
+
+### Purpose
+Calculate the true celestial position angle between two stars (Star A and Star B) on the sky,
+measured east from north.
+
+### Steps
+1. Delta Declination: `Δδ = δ2 - δ1`
+2. Delta Right Ascension (scaled): `Δα' = (α2 - α1) * cos(δ1)`
+   - Corrects for RA line convergence toward celestial poles.
+3. Position Angle (PA_cel): `PA_cel = arctan2(Δα', Δδ)`
+   - Result is normalized to [0°, 360°).
+
+---
+
+## 3. Pixel Position Angle (θ_pix)
+
+### Purpose
+Calculate the position angle between the two stars in the pixel coordinate system of the image,
+measured from the positive Y-axis.
+
+### Steps
+1. Delta Pixel Coordinates: `Δx = x2 - x1`, `Δy = y2 - y1`
+2. Pixel Position Angle: `θ_pix = arctan2(Δx, Δy)`
+   - Result is normalized to [0°, 360°).
+
+---
+
+## 4. Camera Angle (Phi)
+
+### Purpose
+Determine the rotation angle (Phi) needed to align the pixel coordinate system with the celestial coordinate system.
+
+### Calculation
+- `Phi = PA_cel - θ_pix`
+- Phi is the angle by which the image must be rotated so that celestial north aligns with the image’s positive Y-axis.
+- Result is normalized to [0°, 360°).
+
+### Interpretation
+- The code provides a human-readable interpretation of the camera’s Y-axis direction (e.g., "X degrees East of North").
+
+---
+
+## Key Principles
+1. **Celestial Coordinate System**: RA/Dec are analogous to longitude/latitude on Earth.
+2. **Pixel Coordinate System**: X/Y pixels are the raw coordinates of stars in the image.
+3. **Rotation and Alignment**: Phi aligns the image’s Y-axis with celestial north.
+
+---
+
+## Summary Table
+
+| Step                | Inputs                          | Calculation/Output                          | Purpose                                      |
+|---------------------|---------------------------------|---------------------------------------------|----------------------------------------------|
+| HMS/DMS to Degrees   | RA (H:M:S), Dec (D:M:S)         | Decimal degrees                            | Enable mathematical processing               |
+| Celestial PA         | RA/Dec (degrees)                | PA_cel (east from north)                   | True angle between stars on the sky         |
+| Pixel PA             | Pixel coordinates (x,y)         | θ_pix (from positive Y-axis)               | Angle between stars in the image            |
+| Camera Angle (Phi)   | PA_cel, θ_pix                   | Phi = PA_cel - θ_pix                       | Rotation to align image with celestial north |
+
+---
+"""
