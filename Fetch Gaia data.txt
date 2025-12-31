@@ -1,0 +1,30 @@
+GAIA DR3 BINARY ANALYZER DOCUMENTATION: THE RUWE RELIABILITY CHECK
+------------------------------------------------------------------
+This script performs a 3D distance analysis of a binary pair using 
+Gaia DR3 parallaxes. However, it includes a critical safety check 
+based on the RUWE (Renormalized Unit Weight Error) parameter.
+
+WHAT IS RUWE?
+RUWE is a 'goodness-of-fit' statistic for Gaia's astrometric solution.
+- RUWE ~ 1.0: The star's movement perfectly matches a single-star model.
+- RUWE > 1.4: The star is 'wobbling' or showing non-linear motion.
+
+WHY THE CHECK IS NECESSARY (Per Tokovinin 2021, Sec 3.4):
+In hierarchical systems (like STF 262), stars that appear to be 'single' 
+components of a binary are often actually unresolved multiples 
+(e.g., Aa,Ab or Ca,Cb). 
+
+1. THE PARALLAX BIAS: When a star wobbles due to an inner companion, 
+   Gaia's single-star mathematical model fails. It produces a 
+   'biased' parallax measurement.
+2. THE DISTANCE TRAP: A biased parallax results in an incorrect distance. 
+   This often creates a 'ghost' distance gap of several parsecs, 
+   making a physical pair look like an optical double.
+
+HOW THE SCRIPT HANDLES THIS:
+- If RUWE > 1.4 for either star, the script triggers a 'Tokovinin Alert'.
+- It still performs the math but warns the user that the resulting 
+  Verdict (Physical vs. Optical) is statistically UNRELIABLE.
+- In these cases, a 'Verdict: Optical' should be ignored if other 
+  evidence (like orbital history or proper motion) suggests a bond.
+ 
