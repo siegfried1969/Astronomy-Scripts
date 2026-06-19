@@ -14,8 +14,11 @@ def calculate_cosmology():
             return
 
         # Perform calculations
+        # Comoving Distance: It tracks where the quasar resides in the universe right now
         comoving = cosmo.comoving_distance(z)
+        # Luminosity Distance: This is the optical fading. It is the "effective" distance the light implies based on how dim it looks.
         luminosity = cosmo.luminosity_distance(z)
+        # Lookback Distance: This is the photon's life span. It is the duration the light spent traveling through the cosmic dark
         lookback = cosmo.lookback_time(z)
         
         # Display results
