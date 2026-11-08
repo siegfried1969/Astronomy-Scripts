@@ -1,122 +1,131 @@
+#!/usr/bin/env python3
 """
-Script to map astronomical coordinates to their corresponding constellations.
+Append the IAU constellation name to each coordinate in a text file.
 
-Requirements:
-- Python 3.x
-- astropy package (install with: pip install astropy)
+Input line format : HHMMSS.ss+DDMMSS.s   (e.g. 092118.79-031225.4)
+Output line format: <coordinate_string> ; <constellation_name>
+
+Setup:
+    pip install astropy numpy
 
 Usage:
-1. Save this script as coordinate_to_constellation.py
-2. Run the script and provide the input file path when prompted
-3. The output will be saved to a file named "coordinates_with_constellations.txt" in the same directory
+    python add_constellation.py                       # prompts for the source file path
+    python add_constellation.py Coordinates.txt       # path given on the command line
+    python add_constellation.py Coordinates.txt out.txt --abbr   # 3-letter IAU abbreviations
+
+If no input path is given, the script asks for one and keeps asking until it
+points to an existing file. The output defaults to <input>_out.txt, next to
+the source file.
+
+Notes:
+  * Coordinates are assumed to be J2000/ICRS. astropy converts them internally to
+    the B1875 frame in which the official IAU constellation boundaries are defined.
+  * RA/Dec are converted to decimal values manually (not via a sexagesimal string
+    parser), so slightly non-standard values such as arcseconds = 60.0 still work.
 """
 
-import os
-from astropy.coordinates import SkyCoord
-from astropy import units as u
+import argparse
+import re
+import sys
+from pathlib import Path
 
-def parse_coordinate(coord_str):
-    """
-    Parse a coordinate string in format HHMMSS.ss+DDMMSS.s or HHMMSS.ss-DDMMSS.s
-    into RA and Dec components.
+try:
+    import numpy as np
+    import astropy.units as u
+    from astropy.coordinates import SkyCoord
+except ImportError:
+    sys.exit("Missing dependencies. Install them with:  pip install astropy numpy")
 
-    Returns:
-        tuple: (ra_str, dec_str) where ra_str is in HH:MM:SS.ss and dec_str is in ±DD:MM:SS.s
-    """
-    # Split into RA and Dec parts
-    if '+' in coord_str:
-        ra_part, dec_part = coord_str.split('+')
-        dec_sign = '+'
-    else:
-        ra_part, dec_part = coord_str.split('-')
-        dec_sign = '-'
+# HHMMSS.ss(+|-)DDMMSS.s
+COORD_RE = re.compile(
+    r"^(?P<h>\d{2})(?P<m>\d{2})(?P<s>\d{2}(?:\.\d+)?)"
+    r"(?P<sign>[+-])"
+    r"(?P<d>\d{2})(?P<am>\d{2})(?P<as_>\d{2}(?:\.\d+)?)$"
+)
 
-    # Format RA as HH:MM:SS.ss
-    ra_h = ra_part[:2]
-    ra_m = ra_part[2:4]
-    ra_s = ra_part[4:]
-    ra_str = f"{ra_h}:{ra_m}:{ra_s}"
 
-    # Format Dec as ±DD:MM:SS.s
-    dec_d = dec_part[:2]
-    dec_m = dec_part[2:4]
-    dec_s = dec_part[4:]
-    dec_str = f"{dec_sign}{dec_d}:{dec_m}:{dec_s}"
+def parse_coordinate(text):
+    """Return (ra_hours, dec_degrees) as floats, or None if the string is invalid."""
+    match = COORD_RE.match(text)
+    if not match:
+        return None
+    g = match.groupdict()
+    ra_h = int(g["h"]) + int(g["m"]) / 60.0 + float(g["s"]) / 3600.0
+    dec = int(g["d"]) + int(g["am"]) / 60.0 + float(g["as_"]) / 3600.0
+    if g["sign"] == "-":
+        dec = -dec
+    if not (0.0 <= ra_h < 24.0 and -90.0 <= dec <= 90.0):
+        return None
+    return ra_h, dec
 
-    return ra_str, dec_str
 
-def get_constellation(ra_str, dec_str):
-    """
-    Get the constellation name for given RA and Dec coordinates.
+def prompt_for_input_path():
+    """Ask the user for the source file path until a valid file is given."""
+    while True:
+        try:
+            raw = input("Enter the path of the source file: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            sys.exit("\nNo input file provided. Exiting.")
+        # Strip surrounding quotes (e.g. from drag-and-drop or 'Copy as path') and expand ~
+        raw = raw.strip('"').strip("'")
+        path = Path(raw).expanduser()
+        if path.is_file():
+            return path
+        print(f"  File not found: {path}\n  Please try again (Ctrl+C to quit).")
 
-    Args:
-        ra_str (str): Right Ascension in HH:MM:SS.ss format
-        dec_str (str): Declination in ±DD:MM:SS.s format
 
-    Returns:
-        str: Constellation name
-    """
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
+    parser.add_argument("input", type=Path, nargs="?",
+                        help="input text file (optional; you will be prompted if omitted)")
+    parser.add_argument("output", type=Path, nargs="?", help="output file (default: <input>_out.txt)")
+    parser.add_argument("--abbr", action="store_true",
+                        help="write 3-letter IAU abbreviations instead of full names")
+    args = parser.parse_args()
+    if args.input is None:
+        args.input = prompt_for_input_path()
+    out_path = args.output or args.input.with_name(args.input.stem + "_out.txt")
+
+    # --- Read input ---------------------------------------------------------
     try:
-        # Create a SkyCoord object with proper units
-        coord = SkyCoord(ra=ra_str, dec=dec_str, unit=(u.hourangle, u.deg), frame='icrs')
-        # Get the constellation name
-        return coord.get_constellation()
-    except Exception as e:
-        print(f"Error processing coordinates {ra_str}, {dec_str}: {str(e)}")
-        return "Unknown"
-
-def process_file(input_path):
-    """
-    Process the input file and write results to output file.
-
-    Args:
-        input_path (str): Path to input text file
-    """
-    try:
-        # Get the directory of the input file
-        input_dir = os.path.dirname(input_path)
-        # Create output file path in the same directory
-        output_path = os.path.join(input_dir, "coordinates_with_constellations.txt")
-
-        with open(input_path, 'r') as infile, open(output_path, 'w') as outfile:
-            for line in infile:
-                line = line.strip()
-                if not line:  # Skip empty lines
-                    continue
-
-                try:
-                    # Parse the coordinate
-                    ra_str, dec_str = parse_coordinate(line)
-                    # Get constellation
-                    constellation = get_constellation(ra_str, dec_str)
-                    # Write to output file
-                    outfile.write(f"{line} ; {constellation}\n")
-                except Exception as e:
-                    print(f"Error processing line '{line}': {str(e)}")
-                    outfile.write(f"{line} ; Error\n")
-
-        print(f"\nProcessing complete!")
-        print(f"Results saved to: {output_path}")
-
+        with open(args.input, "r", encoding="utf-8") as fh:
+            lines = [ln.strip() for ln in fh]
     except FileNotFoundError:
-        print(f"Error: Input file '{input_path}' not found.")
-    except IOError as e:
-        print(f"Error reading/writing files: {str(e)}")
+        sys.exit(f"Error: input file not found: {args.input}")
+    except (PermissionError, UnicodeDecodeError, OSError) as exc:
+        sys.exit(f"Error reading {args.input}: {exc}")
+
+    # --- Parse (keep original line order; remember invalid lines) -----------
+    entries = []          # (original_string, parsed_or_None) for non-empty lines
+    for lineno, line in enumerate(lines, start=1):
+        if not line:
+            continue
+        parsed = parse_coordinate(line)
+        if parsed is None:
+            print(f"Warning: line {lineno} could not be parsed: {line!r}", file=sys.stderr)
+        entries.append((line, parsed))
+
+    valid = [(i, p) for i, (_, p) in enumerate(entries) if p is not None]
+    names = {}
+    if valid:
+        # --- Vectorised constellation lookup (fast for large files) ---------
+        ra = np.array([p[0] for _, p in valid]) * u.hourangle
+        dec = np.array([p[1] for _, p in valid]) * u.deg
+        coords = SkyCoord(ra=ra, dec=dec, frame="icrs")
+        result = coords.get_constellation(short_name=args.abbr)
+        names = {idx: str(name) for (idx, _), name in zip(valid, np.atleast_1d(result))}
+
+    # --- Write output -------------------------------------------------------
+    try:
+        with open(out_path, "w", encoding="utf-8") as fh:
+            for i, (text, parsed) in enumerate(entries):
+                label = names[i] if parsed is not None else "INVALID"
+                fh.write(f"{text} ; {label}\n")
+    except OSError as exc:
+        sys.exit(f"Error writing {out_path}: {exc}")
+
+    print(f"Processed {len(entries)} lines ({len(valid)} valid). Output: {out_path}")
+
 
 if __name__ == "__main__":
-    print("Astronomical Coordinate to Constellation Mapper")
-    print("----------------------------------------------")
-
-    # Prompt user for input file path
-    input_path = input("Enter the path to your coordinates file: ").strip()
-
-    # Remove quotes if present (in case user copies path with quotes)
-    input_path = input_path.strip('"\'')
-
-    # Verify the file exists
-    if not os.path.isfile(input_path):
-        print(f"Error: The file '{input_path}' does not exist.")
-        exit(1)
-
-    print(f"\nProcessing file: {input_path}")
-    process_file(input_path)
+    main()
